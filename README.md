@@ -29,6 +29,12 @@ RPC_URL=""
 ```
 
 4. Run the agent:
+- In terminal mode
 ```bash
 node index.js
+```
+
+- Have an API exposed:
+```bash
+node server.js
 ```

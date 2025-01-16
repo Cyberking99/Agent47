@@ -1,9 +1,13 @@
 import { StarknetAgent } from 'starknet-agent-kit';
-import readline from 'node:readline';
 import dotenv from 'dotenv';
 import express from 'express';
 
 dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(express.json());
 
 const agent = new StarknetAgent({
   aiProviderApiKey: process.env.AI_PROVIDER_API_KEY,
@@ -11,11 +15,6 @@ const agent = new StarknetAgent({
   aiModel: process.env.AI_MODEL,
   walletPrivateKey: process.env.PRIVATE_KEY,
   rpcUrl: process.env.RPC_URL,
-});
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
 });
 
 const shortenUrl = (url) => (url.length > 30 ? `${url.slice(0, 27)}...` : url);
@@ -47,23 +46,14 @@ const parseAndDisplayWithShortLinks = (text) => {
     }
 
     if (found.startsWith('0x') && found.length === 66) {
-      
       const shortened = shortenTxHash(found);
-      parts.push(
-        `https://starkscan.co/tx/${found}`
-      );
+      parts.push(`https://starkscan.co/tx/${found}`);
     } else if (found.includes('tx/0x')) {
-      
       const rawHash = found.split('/tx/')[1] ?? '';
       const shortened = rawHash.length === 66 ? shortenTxHash(rawHash) : shortenUrl(found);
-      parts.push(
-        `${modifiedUrl}`
-      );
+      parts.push(`${modifiedUrl}`);
     } else if (found.startsWith('http')) {
-      
-      parts.push(
-        `${modifiedUrl}`
-      );
+      parts.push(`${modifiedUrl}`);
     } else {
       parts.push(found);
     }
@@ -79,29 +69,28 @@ const parseAndDisplayWithShortLinks = (text) => {
 let thread = "You are Starkbot, a friendly and knowledgeable AI specializing in StarkNet and blockchain technology. " +
              "You always respond in a helpful and engaging way, with a touch of humor when appropriate.\n\n";
 
-async function chatLoop() {
-  rl.question("Enter your prompt (type 'exit' to quit): ", async (input) => {
-    if (input.toLowerCase() === 'exit') {
-      console.log("Exiting chat...");
-      rl.close();
-      return;
-    }
+app.post('/api/chat', async (req, res) => {
+  const { prompt } = req.body;
 
-    try {
-      let prompt = `${thread}\n${input}`;
-      const response = await agent.execute(prompt);
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required." });
+  }
 
-      const parsedResponse = parseAndDisplayWithShortLinks(response.output);
-      console.log("Response:", parsedResponse);
+  try {
+    const fullPrompt = `${thread}\nUser: ${prompt}`;
+    const response = await agent.execute(fullPrompt);
 
-      thread += `User: ${input}\nAgent: ${response.output}\n\n`;
+    const parsedResponse = parseAndDisplayWithShortLinks(response.output);
+    
+    thread += `User: ${prompt}\nAgent: ${response.output}\n\n`;
 
-      chatLoop();
-    } catch (error) {
-      console.error("An error occurred:", error.message);
-      chatLoop();
-    }
-  });
-}
+    res.json({ response: parsedResponse });
+  } catch (error) {
+    console.error("An error occurred:", error.message);
+    res.status(500).json({ error: "An internal error occurred." });
+  }
+});
 
-chatLoop();
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
